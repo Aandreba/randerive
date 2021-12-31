@@ -1,7 +1,9 @@
 extern crate proc_macro;
+use std::collections::HashSet;
+
 use proc_macro::{TokenStream};
 use quote::quote;
-use syn::{Ident, DataStruct, Generics, Data};
+use syn::{Ident, DataStruct, Generics, Type};
 
 /// Derives the random value of a struct by giving a random value to all it's fields
 #[proc_macro_derive(Rand)]
@@ -36,15 +38,16 @@ fn impl_distr_w_generics (name: &Ident, generics: &Generics, data: &DataStruct) 
     let ident = data.fields.iter()
         .map(|x| x.ident.as_ref().unwrap());
 
-    let gen = quote! {
-        use rand::distributions::{Standard, Distribution};
+    let ty = data.fields.iter()
+        .map(|x| &x.ty);
 
-        impl #generics Distribution<#name #generics> for Standard where Standard: Distribution #generics {
+    let gen = quote! {
+        impl #generics rand::distributions::Distribution<#name #generics> for rand::distributions::Standard where rand::distributions::Standard: rand::distributions::Distribution #generics {
             #[inline]
             fn sample<R: rand::Rng + ?Sized> (&self, rng: &mut R) -> #name #generics {
                 #name::#generics {
                     #(
-                        #ident: Self::sample(self, rng),
+                        #ident: <Self as rand::distributions::Distribution<#ty>>::sample(self, rng),
                     )*
                 }
             }
@@ -59,9 +62,7 @@ fn impl_distr_wo_generics (name: &Ident, data: &DataStruct) -> TokenStream {
         .map(|x| x.ident.as_ref().unwrap());
 
     let gen = quote! {
-        use rand::distributions::{Standard, Distribution};
-
-        impl Distribution<#name> for Standard {
+        impl rand::distributions::Distribution<#name> for rand::distributions::Standard {
             #[inline]
             fn sample<R: rand::Rng + ?Sized> (&self, rng: &mut R) -> #name {
                 #name {
